@@ -1,0 +1,107 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# GofPT1
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+The goal of GofPT1 is to provide rigorous goodness-of-fit testing methodologies for sparse parametric regression models in ultra-high dimensional settings, where the number of covariates ($p$) may significantly exceed the sample size ($n$).
+
+In such scenarios, traditional empirical process-based tests often fail due to the "curse of dimensionality". GofPT1 overcomes these challenges by implementing a novel Hybrid Test strategy that aggregates p-values from:
+
+Martingale-Transformed Tests: Asymptotically distribution-free and powerful against low-frequency signals.
+
+Local Smoothing (PLS) Tests: Superior for detecting high-frequency alternatives.
+
+The package uses the Cauchy combination method to ensure robust power against various types of model misspecification.
+
+## Installation
+
+You can install the development version of GofPT1 like so:
+
+``` r
+# install.packages("devtools")
+devtools::install_github("YourGithubUsername/GofPT1")
+```
+
+## Example
+
+This is a basic example showing how to solve a common problem: testing the goodness-of-fit for high-dimensional linear and logistic regression models.
+
+First, load the necessary libraries:
+
+```{r}
+library(GofPT1)
+library(glmnet) # Required for estimation
+library(MASS) # Required for matrix operations
+```
+
+1. Linear Regression (Gaussian Family)We simulate a high-dimensional dataset ($n=100, p=150$) where the true model is linear. We expect the test not to reject the null hypothesis (high p-value).
+
+```{r}
+set.seed(123)
+n <- 100
+p <- 150 # High dimension: p > n
+
+# Generate predictors
+X <- matrix(rnorm(n * p), n, p)
+
+# Generate response: True model is linear (H0 holds)
+Y_linear <- 1.5 * X[, 1] + 2 * X[, 2] - X[, 3] + rnorm(n)
+
+# --- Recommended Method: Hybrid Test ---
+# Automatically handles variable selection and combines Martingale & PLS tests.
+res_hybrid <- hybrid_test(X, Y_linear, family = "gaussian")
+
+print(paste("Hybrid Test P-value:", round(res_hybrid[["pval_cauchy_hybrid"]], 4)))
+```
+
+2. Logistic Regression (Binomial Family)
+We simulate a binary response variable.
+
+```{r}
+# Generate probability using a logistic link
+z <- X[, 1] - X[, 2] + 0.5 * X[, 5]
+prob <- 1 / (1 + exp(-z))
+Y_binom <- rbinom(n, 1, prob)
+
+# Run the Hybrid Test for Binomial family
+res_binom <- hybrid_test(X, Y_binom, family = "binomial")
+
+print(paste("Binomial Hybrid P-value:", round(res_binom[["pval_cauchy_hybrid"]], 4)))
+```
+
+3. Detecting Misspecification (Power)
+Here we simulate a scenario where the null hypothesis is false (True model is Quadratic, but we fit a Linear model). The test should reject the null hypothesis (low p-value).
+
+```{r}
+# True model is nonlinear (Quadratic)
+Y_nonlinear <- 2 * X[, 1] + 3 * (X[, 2]^2) + rnorm(n)
+
+# Test assuming a Linear GLM
+res_power <- hybrid_test(X, Y_nonlinear, family = "gaussian")
+
+# We expect a small p-value here (< 0.05)
+print(paste("Nonlinear Data P-value:", round(res_power[["pval_cauchy_hybrid"]], 4)))
+```
+
+
+
+Functions Overview
+
+hybrid_test(x, y, family): The primary function. Implements the hybrid strategy (Martingale + PLS) with adaptive estimation (Lasso/GLM).
+
+Gof_CPB_test(X, Y, fam, penalize): A Consistent Projection-Based test that allows for strictly penalized (Lasso) or unpenalized (GLMNET) estimation logic.

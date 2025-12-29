@@ -1,0 +1,27 @@
+Package: GofPT1
+Type: Package
+Title: A Two-Step Projection-Based Goodness-of-Fit Test for Ultra-High Dimensional Sparse Regressions  & Asymptotic Distribution-Free Tests for Ultra-high Dimensional Parametric Regressions via Projected Empirical Processes and p-value Combination
+Version: 0.1.0
+Authors@R: c(
+    person("Falong", "Tan", email = "falongtan@hnu.edu.cn", role = c("aut", "cre")),
+    person("Jie", "Liu", email = "Jiel000@hnu.edu.cn", role = "aut"),
+    person("Heng", "Peng", role = "aut"),
+    person("Lixing", "Zhu", role = "aut")
+  )
+Maintainer: Falong Tan <falongtan@hnu.edu.cn>
+Description: Methodology for testing nonlinearity in the conditional mean function in low, high or ultra-high-dimensional generalized linear models. Details on the algorithms can be found in the paper by Tan, Liu, Peng and Zhu (2025).
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Suggests: 
+    renv
+Imports: 
+    caret,
+    glmnet,
+    LassoSIR,
+    MASS,
+    psych,
+    VariableScreening
+RoxygenNote: 7.3.3
+Depends: 
+    R (>= 3.5)
