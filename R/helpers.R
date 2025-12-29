@@ -10,11 +10,6 @@ split_data <- function(X, Y) {
 }
 
 # --- 3.2 Estimation Function (Crucial: Handles CPB vs Hybrid Logic) ---
-#' @details
-#' If \code{penalize} is \code{NULL} (Hybrid mode), the function mimics the original code's
-#' logic: it attempts Lasso selection followed by a GLM refit. If the GLM coefficients contain NAs
-#' (indicating collinearity), it uses \code{caret::findCorrelation} to remove highly correlated
-#' predictors (cutoff 0.9) and refits.
 get_residuals_and_beta <- function(x, y, family = "gaussian", penalize = TRUE) {
   x <- as.matrix(x)
   y <- as.numeric(y)
@@ -172,7 +167,7 @@ get_sdr_projections <- function(x, y_list, family) {
   ))
 }
 
-# --- 3.4 Martingale Test Statistics ---
+# --- 3.4 Pcvm Test Statistics ---
 calc_martingale_pvals <- function(x_source, est, pro_target, family) {
   n <- nrow(x_source)
   num_pro <- ncol(pro_target)
@@ -313,7 +308,7 @@ combine_pvals <- function(p) {
   return(c(cauchy = cauchy, fisher = fisher, min_p = min_p))
 }
 
-# --- 3.7 Helpers for Bandwidth and Brownian Table ---
+# --- 3.7 The choice for the bandwidth for martingale-based test ---
 bandwidth_choice_logit <- function(x, y_mat) {
   n <- length(x)
   # Original code: c_h <- seq(0.25, 1.25, 0.15)
@@ -339,6 +334,7 @@ bandwidth_choice_logit <- function(x, y_mat) {
   return(h_seq[which.min(CV)])
 }
 
+# --- 3.8 The p-value of int_0^1 B(t)^2 dt where B(t) is the standard brown motion ---
 pvalue_integ_Brown <- function(x) {
   p0 <- c(
     1, 1, 0.9994, 0.9945, 0.9824, 0.9642, 0.9417, 0.9169, 0.891, 0.8648, 0.839, 0.8138, 0.7894, 0.7659,

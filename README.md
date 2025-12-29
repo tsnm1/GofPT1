@@ -1,24 +1,16 @@
----
-output: github_document
----
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
-
-```{r, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  fig.path = "man/figures/README-",
-  out.width = "100%"
-)
-```
 
 # GofPT1
 
 <!-- badges: start -->
+
 <!-- badges: end -->
 
-The goal of GofPT1 is to provide rigorous goodness-of-fit testing methodologies for sparse parametric regression models in ultra-high dimensional settings, where the number of covariates ($p$) may significantly exceed the sample size ($n$).!!!
+The goal of GofPT1 is to provide rigorous goodness-of-fit testing
+methodologies for sparse parametric regression models in ultra-high
+dimensional settings, where the number of covariates ($p$) may
+significantly exceed the sample size ($n$).!!!
 
 ## Installation
 
@@ -28,29 +20,39 @@ You can install the development version of GofPT1 like so:
 # install.packages("devtools")
 devtools::install_github("tsnm1/GofPT1")
 ```
+
 ## Functions Overview
 
-* Gof_CPB_test(X, Y, fam, penalize): A Two-Step Projection-Based Goodness-of-Fit Test for Ultra-High Dimensional Sparse Regressions
+- Gof_CPB_test(X, Y, fam, penalize): A Two-Step Projection-Based
+  Goodness-of-Fit Test for Ultra-High Dimensional Sparse Regressions
 
-* Gof_Pcvm_test(x, y, family): Asymptotic Distribution-Free Tests for Ultra-high Dimensional Parametric Regressions via Projected Empirical Processes and p-value Combination
+- Gof_Pcvm_test(x, y, family): Asymptotic Distribution-Free Tests for
+  Ultra-high Dimensional Parametric Regressions via Projected Empirical
+  Processes and p-value Combination
 
 ## Example
 
-This is a basic example showing how to solve a common problem: testing the goodness-of-fit for high-dimensional linear and logistic regression models.
+This is a basic example showing how to solve a common problem: testing
+the goodness-of-fit for high-dimensional linear and logistic regression
+models.
 
 First, load the necessary libraries:
 
-```{r,warning = FALSE}
+``` r
 library(GofPT1)
 library(glmnet) # Required for estimation
+#> Loading required package: Matrix
+#> Loaded glmnet 4.1-10
 library(MASS) # Required for matrix operations
 ```
 
-1. linear + test
+1.  linear + test
 
-Linear Regression (Gaussian Family)We simulate a high-dimensional dataset ($n=100, p=150$) where the true model is linear. We expect the test not to reject the null hypothesis (high p-value).
+Linear Regression (Gaussian Family)We simulate a high-dimensional
+dataset ($n=100, p=150$) where the true model is linear. We expect the
+test not to reject the null hypothesis (high p-value).
 
-```{r,warning = FALSE}
+``` r
 
 # Simulation example 
 set.seed(123)
@@ -74,17 +76,16 @@ output14 <- Gof_Pcvm_test(x, y, family = "gaussian")
 
 # Real data analysis
 dim(data_crime)
+#> [1] 1994  100
 y <- data_crime[, 100]
 x <- data_crime[, -100]
 output15 <- Gof_CPB_test(x, y, fam = "gaussian")
 output16 <- Gof_Pcvm_test(x, y, fam = "gaussian")
-
 ```
 
+2.  logit(Binomial Family)
 
-2. logit(Binomial Family) 
-
-```{r,warning = FALSE}
+``` r
 # Simulation example 
 set.seed(123)
 n <- 300; p <- 50; pho <- 0.4
@@ -110,12 +111,10 @@ output24 <- Gof_Pcvm_test(x, y, fam = "binomial")
 
 # Real data analysis
 dim(data_AML)
+#> [1]   444 22845
 y <- data_AML$ELN_binary
 x <- data_AML[,1:(ncol(data_AML)-2)]
 x <- x[,-which(is.na(apply(data_AML,2,sum)))]
 output25 <- Gof_CPB_test(x, y, fam = "binomial")
 output26 <- Gof_Pcvm_test(x, y, fam = "binomial")
 ```
-
-# References
-
