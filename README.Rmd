@@ -51,23 +51,25 @@ library(MASS) # Required for matrix operations
 Linear Regression (Gaussian Family)We simulate a high-dimensional dataset ($n=100, p=150$) where the true model is linear. We expect the test not to reject the null hypothesis (high p-value).
 
 ```{r,warning = FALSE}
-
-# Simulation example 
+# Simulation example
 set.seed(123)
-n <- 300; p <- 50; pho <- 0.4
-mu <- rep(0, p);v <- pho^(0:(p-1))
+n <- 300
+p <- 50
+pho <- 0.4
+mu <- rep(0, p)
+v <- pho^(0:(p - 1))
 sigma <- toeplitz(v)
 x <- mvrnorm(n, mu, sigma)
-beta0 <- c(rep(1,5),rep(0,p-5))
+beta0 <- c(rep(1, 5), rep(0, p - 5))
 
 # H11
 a <- 0
-y <- x %*% beta0 + a * 0.1*(x %*% beta0)^2 + rnorm(n)   
+y <- x %*% beta0 + a * 0.1 * (x %*% beta0)^2 + rnorm(n)
 output11 <- Gof_CPB_test(x, y, fam = "gaussian")
 output12 <- Gof_Pcvm_test(x, y, family = "gaussian")
 
 a <- 1
-y <- x %*% beta0 + a * 0.1*(x %*% beta0)^2 + rnorm(n)   
+y <- x %*% beta0 + a * 0.1 * (x %*% beta0)^2 + rnorm(n)
 output13 <- Gof_CPB_test(x, y, fam = "gaussian")
 output14 <- Gof_Pcvm_test(x, y, family = "gaussian")
 
@@ -78,41 +80,43 @@ y <- data_crime[, 100]
 x <- data_crime[, -100]
 output15 <- Gof_CPB_test(x, y, fam = "gaussian")
 output16 <- Gof_Pcvm_test(x, y, fam = "gaussian")
-
 ```
 
 
 2. logit(Binomial Family) 
 
 ```{r,warning = FALSE}
-# Simulation example 
+# Simulation example
 set.seed(123)
-n <- 300; p <- 50; pho <- 0.4
-mu <- rep(0, p);v <- pho^(0:(p-1))
+n <- 300
+p <- 50
+pho <- 0.4
+mu <- rep(0, p)
+v <- pho^(0:(p - 1))
 sigma <- toeplitz(v)
 x <- mvrnorm(n, mu, sigma)
-beta0 <- c(rep(1,5),rep(0,p-5))
+beta0 <- c(rep(1, 5), rep(0, p - 5))
 
 # H21
 a <- 0
-z <- x %*% beta0 + a*0.2*(x %*% beta0)^2
-pr <- 1/(1 + exp(-z)) 
-y <- matrix(rbinom(n, 1, pr),ncol = 1)
+z <- x %*% beta0 + a * 0.2 * (x %*% beta0)^2
+pr <- 1 / (1 + exp(-z))
+y <- matrix(rbinom(n, 1, pr), ncol = 1)
 output21 <- Gof_CPB_test(x, y, fam = "binomial")
 output22 <- Gof_Pcvm_test(x, y, fam = "binomial")
 
 a <- 1
-z <- x %*% beta0 + a*0.2*(x %*% beta0)^2
-pr <- 1/(1 + exp(-z)) 
-y <- matrix(rbinom(n, 1, pr),ncol = 1)
+z <- x %*% beta0 + a * 0.2 * (x %*% beta0)^2
+pr <- 1 / (1 + exp(-z))
+y <- matrix(rbinom(n, 1, pr), ncol = 1)
 output23 <- Gof_CPB_test(x, y, fam = "binomial")
 output24 <- Gof_Pcvm_test(x, y, fam = "binomial")
 
 # Real data analysis
 dim(data_AML)
 y <- data_AML$ELN_binary
-x <- data_AML[,1:(ncol(data_AML)-2)]
-x <- x[,-which(is.na(apply(data_AML,2,sum)))]
+x <- data_AML[, 1:(ncol(data_AML) - 2)]
+x <- x[, -which(is.na(apply(data_AML, 2, sum)))]
 output25 <- Gof_CPB_test(x, y, fam = "binomial")
 output26 <- Gof_Pcvm_test(x, y, fam = "binomial")
 ```

@@ -26,49 +26,55 @@ combination method to ensure robust power against various alternatives.
 \examples{
 # Simulation example # H11
 set.seed(123)
-n <- 300; p <- 50; pho <- 0.4
-mu <- rep(0, p);v <- pho^(0:(p-1))
+n <- 300
+p <- 50
+pho <- 0.4
+mu <- rep(0, p)
+v <- pho^(0:(p - 1))
 sigma <- toeplitz(v)
 x <- mvrnorm(n, mu, sigma)
-beta0 <- c(rep(1,5),rep(0,p-5))
+beta0 <- c(rep(1, 5), rep(0, p - 5))
 
 a <- 0
-y <- x \%*\% beta0 + a * 0.1*(x \%*\% beta0)^2 + rnorm(n)
+y <- x \%*\% beta0 + a * 0.1 * (x \%*\% beta0)^2 + rnorm(n)
 output12 <- Gof_Pcvm_test(x, y, family = "gaussian")
 a <- 1
-y <- x \%*\% beta0 + a * 0.1*(x \%*\% beta0)^2 + rnorm(n)
+y <- x \%*\% beta0 + a * 0.1 * (x \%*\% beta0)^2 + rnorm(n)
 output14 <- Gof_Pcvm_test(x, y, family = "gaussian")
 
 # Real data analysis
 dim(data_crime)
 y <- data_crime[, 100]
 x <- data_crime[, -100]
-output16 <- Gof_Pcvm_test(x, y, fam = "gaussian")
+output16 <- Gof_Pcvm_test(x, y, family = "gaussian")
 
 # Simulation example  # H21
 set.seed(123)
-n <- 300; p <- 50; pho <- 0.4
-mu <- rep(0, p);v <- pho^(0:(p-1))
+n <- 300
+p <- 50
+pho <- 0.4
+mu <- rep(0, p)
+v <- pho^(0:(p - 1))
 sigma <- toeplitz(v)
 x <- mvrnorm(n, mu, sigma)
-beta0 <- c(rep(1,5),rep(0,p-5))
+beta0 <- c(rep(1, 5), rep(0, p - 5))
 
 a <- 0
-z <- x \%*\% beta0 + a*0.2*(x \%*\% beta0)^2
-pr <- 1/(1 + exp(-z))
-y <- matrix(rbinom(n, 1, pr),ncol = 1)
-output22 <- Gof_Pcvm_test(x, y, fam = "binomial")
+z <- x \%*\% beta0 + a * 0.2 * (x \%*\% beta0)^2
+pr <- 1 / (1 + exp(-z))
+y <- matrix(rbinom(n, 1, pr), ncol = 1)
+output22 <- Gof_Pcvm_test(x, y, family = "binomial")
 a <- 1
-z <- x \%*\% beta0 + a*0.2*(x \%*\% beta0)^2
-pr <- 1/(1 + exp(-z))
-y <- matrix(rbinom(n, 1, pr),ncol = 1)
-output24 <- Gof_Pcvm_test(x, y, fam = "binomial")
+z <- x \%*\% beta0 + a * 0.2 * (x \%*\% beta0)^2
+pr <- 1 / (1 + exp(-z))
+y <- matrix(rbinom(n, 1, pr), ncol = 1)
+output24 <- Gof_Pcvm_test(x, y, family = "binomial")
 
 # Real data analysis
 dim(data_AML)
 y <- data_AML$ELN_binary
-x <- data_AML[,1:(ncol(data_AML)-2)]
-x <- x[,-which(is.na(apply(data_AML,2,sum)))]
-output26 <- Gof_Pcvm_test(x, y, fam = "binomial")
+x <- data_AML[, 1:(ncol(data_AML) - 2)]
+x <- x[, -which(is.na(apply(data_AML, 2, sum)))]
+output26 <- Gof_Pcvm_test(x, y, family = "binomial")
 
 }

@@ -10,276 +10,354 @@ split_data <- function(X, Y) {
 }
 
 # --- 3.2 Estimation Function (Crucial: Handles CPB vs Hybrid Logic) ---
-get_residuals_and_beta <- function(x, y, family = "gaussian", penalize = TRUE) {
+get_residuals_and_beta <- function(x, y, family = c("gaussian", "binomial"),
+                                   penalize = NULL) {
+  family <- match.arg(family)
   x <- as.matrix(x)
   y <- as.numeric(y)
   n <- nrow(x)
   p <- ncol(x)
-  pred <- NULL
-  beta_hat <- rep(0, p)
-  intercept <- 0
 
-  # --- Logic Branch A: CPB Method (Strictly GLMNET based) ---
-  if (!is.null(penalize)) {
-    if (penalize) {
-      # 1. Penalized: Lasso Selection -> Unpenalized GLMNET Refit
-      fit_cv <- cv.glmnet(x, y, family = family)
-      beta_lasso <- coef(fit_cv, s = "lambda.min")[-1]
-      idx <- which(beta_lasso != 0)
-
-      if (length(idx) == 0) {
-        pred <- rep(mean(y), n)
-        # beta_hat remains 0
-      } else {
-        fit_refit <- glmnet(x[, idx, drop = FALSE], y, family = family, lambda = 0)
-        pred <- predict(fit_refit, newx = x[, idx, drop = FALSE], type = "response")
-        beta_sub <- coef(fit_refit)[-1]
-        beta_hat[idx] <- as.numeric(beta_sub)
-        intercept <- coef(fit_refit)[1]
-      }
-    } else {
-      # 2. Unpenalized: Full GLMNET
-      fit_full <- glmnet(x, y, family = family, lambda = 0)
-      pred <- predict(fit_full, newx = x, type = "response")
-      beta_hat <- coef(fit_full)[-1]
-      intercept <- coef(fit_full)[1]
-    }
+  if (is.null(penalize)) {
+    penalize <- (p >= n - 1)
   }
 
-  # --- Logic Branch B: Hybrid Method (penalize = NULL) ---
-  else {
-    # Original Pcvm_Pls logic: Lasso Selection -> GLM (stats) -> Caret Cleanup
-    glm_fam <- if (family == "gaussian") gaussian() else binomial(link = "logit")
+  if (isTRUE(penalize)) {
+    # --- Step 1: Lasso Selection ---
+    lasso_model1 <- glmnet::cv.glmnet(x, y, family = family, intercept = TRUE)
+    lasso_beta1 <- coef(lasso_model1, s = "lambda.min")[-1]
+    index_beta1_non0 <- which(as.numeric(lasso_beta1) != 0)
 
-    cv_fit <- cv.glmnet(x, y, family = family, intercept = TRUE)
-    b_lasso <- as.numeric(coef(cv_fit, s = "lambda.min")[-1])
-    intercept <- as.numeric(coef(cv_fit, s = "lambda.min")[1])
-    idx <- which(b_lasso != 0)
-    beta_hat <- b_lasso # Default to Lasso beta
+    if (length(index_beta1_non0) == 0) {
+      # --- Case: No variables selected ---
+      intercept1 <- mean(y)
+      U1 <- y - mean(y)
+      beta1_hat <- lasso_beta1
+      beta1_pro <- rep(1, p) / sqrt(p)
+    } else {
+      # --- Case: Variables selected -> Refit ---
 
-    if (length(idx) > 0) {
-      x_sub <- x[, idx, drop = FALSE]
+      if (family == "gaussian") {
+        # --- Gaussian Logic: GLM + Caret Cleanup ---                                            # second estimation
+        x1_sec <- x[, index_beta1_non0, drop = FALSE]
+        sec_model1 <- glm(y ~ x1_sec, family = gaussian)
+        sec_beta1 <- unname(sec_model1$coefficients)[-1]
+        lasso_beta1[index_beta1_non0] <- sec_beta1
+        beta1_hat <- lasso_beta1
+        intercept1 <- sec_model1$coefficients[1]
+        pred1 <- predict(sec_model1, newx = x1_sec, type = "response")
+        pred1 <- matrix(unname(pred1), ncol = 1)
+        U1 <- y - pred1
+        beta1_pro <- beta1_hat / sqrt(sum(beta1_hat^2))
 
-      # Attempt standard GLM
-      fit_sub <- tryCatch(glm(y ~ x_sub, family = glm_fam), error = function(e) NULL)
 
-      b_sub_check <- if (!is.null(fit_sub)) coef(fit_sub)[-1] else NA
+        if (any(is.na(sec_beta1))) {
+          library(caret)
+          lasso_beta1 <- coef(lasso_model1, s = "lambda.min")[-1]
 
-      # If GLM fails or produces NA (Collinearity), use Caret logic
-      if (is.null(fit_sub) || any(is.na(b_sub_check))) {
-        # Original logic: "if(sum(is.na(sec_beta1))>0) { library(caret) ... }"
-        if (ncol(x_sub) > 1) {
-          # Use pairwise complete obs for correlation, just like original code
-          cor_matrix <- cor(x_sub, use = "pairwise.complete.obs")
-          high_cor <- tryCatch(caret::findCorrelation(cor_matrix, cutoff = 0.9), error = function(e) NULL)
+          cor_matrix <- cor(x1_sec, use = "pairwise.complete.obs")
+          high_cor_vars <- findCorrelation(cor_matrix, cutoff = 0.9, verbose = TRUE)
+          index_beta1_non0 <- index_beta1_non0[-high_cor_vars]
+          x1_sec <- x[, index_beta1_non0]
 
-          if (!is.null(high_cor) && length(high_cor) > 0) {
-            x_sub <- x_sub[, -high_cor, drop = FALSE]
-            # Update index to remove dropped columns
-            idx <- idx[-high_cor]
-            # Refit GLM
-            fit_sub <- tryCatch(glm(y ~ x_sub, family = glm_fam), error = function(e) NULL)
-          }
+          sec_model1 <- glm(y ~ x1_sec, family = gaussian)
+          sec_beta1 <- unname(sec_model1$coefficients)[-1]
+          lasso_beta1[index_beta1_non0] <- sec_beta1
+          beta1_hat <- lasso_beta1
+          pred1 <- predict(sec_model1, newx = x1_sec, type = "response")
+          pred1 <- matrix(unname(pred1), ncol = 1)
+          U1 <- y - pred1 # residual based on x2 y2
+          # U1 <- sec_model1$residuals
+          beta1_pro <- beta1_hat / sqrt(sum(beta1_hat^2))
+        }
+      } else {
+        # --- Binomial Logic: GLM + cv.glmnet fallback ---
+        x1_sec <- x[, index_beta1_non0, drop = FALSE]
+        sec_model1 <- tryCatch(glm(y ~ x1_sec, family = binomial(link = "logit")), error = function(e) NULL)
+        lasso_beta1[index_beta1_non0] <- unname(sec_model1$coefficients)[-1]
+        beta1_hat <- lasso_beta1
+        intercept1 <- unname(sec_model1$coefficients)[1]
+        pred1 <- predict(sec_model1, newx = x1_sec, type = "response")
+        pred1 <- matrix(unname(pred1), ncol = 1)
+        U1 <- y - pred1
+        beta1_pro <- beta1_hat
+
+        if (is.null(sec_model1) || any(is.na(coef(sec_model1)))) {
+          lasso_model1_1 <- cv.glmnet(x1_sec, y, family = "binomial", alpha = 1)
+          lasso_beta1[index_beta1_non0] <- coef(lasso_model1_1, s = "lambda.min")[-1]
+          beta1_hat <- lasso_beta1
+          intercept1 <- coef(lasso_model1_1, s = "lambda.min")[1]
+          pred1 <- predict(lasso_model1_1, newx = x1_sec, s = "lambda.min", type = "response")
+          U1 <- y - as.vector(pred1)
+          beta1_pro <- beta1_hat
         }
       }
-
-      # Apply GLM results if valid
-      if (!is.null(fit_sub) && !any(is.na(coef(fit_sub)[-1]))) {
-        beta_hat[] <- 0 # Reset
-        beta_hat[idx] <- coef(fit_sub)[-1]
-        intercept <- coef(fit_sub)[1]
-        pred <- predict(fit_sub, type = "response")
-      } else {
-        # Fallback to Lasso prediction if GLM still fails
-        pred <- predict(cv_fit, newx = x, s = "lambda.min", type = "response")
-      }
-    } else {
-      # Intercept only model
-      pred <- rep(mean(y), n)
     }
+  } else {
+    # --- Case: Non-penalize (Full GLM) ---
+    fit1 <- glm(y ~ x, family = if (family == "gaussian") gaussian() else binomial(link = "logit"))
+    beta1_hat <- coef(fit1)[-1]
+    intercept1 <- coef(fit1)[1]
+    U1 <- y - predict(fit1, type = "response")
+    beta1_pro <- beta1_hat / sqrt(sum(beta1_hat^2))
   }
 
-  # Final fallback for predictions
-  if (is.null(pred)) {
-    lin <- as.numeric(x %*% beta_hat + intercept)
-    pred <- if (family == "gaussian") lin else plogis(lin)
-  }
-  pred <- as.vector(pred)
-  U <- y - pred
-
-  # Calculate beta projection (Logic from original code)
-  bnorm <- sqrt(sum(beta_hat^2))
-  b_pro <- if (bnorm > 1e-10) beta_hat / bnorm else rep(1, p) / sqrt(p)
-
-  # Calculate derivative for Binomial Martingale test (Logic from original code)
-  deri <- NULL
-  if (family == "binomial") {
-    # Original: deri_link1 <- plogis(...) * (1 - plogis(...))
-    lin_pred <- x %*% beta_hat + intercept
-    probs <- plogis(lin_pred)
-    deri <- as.vector(probs * (1 - probs))
+  # Derivative for Martingale (Strictly original binomial formula)
+  deri <- if (family == "binomial") {
+    # p_val <- as.vector(y - U1)
+    # p_val * (1 - p_val)
+    plogis(x %*% beta1_hat + intercept1) * (1 - plogis(x %*% beta1_hat + intercept1))
+  } else {
+    NULL
   }
 
   return(list(
-    U = as.matrix(U), beta_pro = matrix(b_pro, ncol = 1),
-    beta_hat = beta_hat, intercept = intercept, deri_link = deri
+    U = as.matrix(U1), beta_pro = matrix(beta1_pro, ncol = 1),
+    beta_hat = beta1_hat, intercept = intercept1, deri_link = deri
   ))
 }
 
 # --- 3.3 SDR Projections ---
-get_sdr_projections <- function(x, y_list, family) {
+get_sdr_projections <- function(x, y_list, family, methods = c("local", "global")) {
   n <- nrow(x)
   p <- ncol(x)
   screen_num <- floor(n / log(n))
 
-  run_sdr <- function(tar, is_cat) {
-    tryCatch(
+  # --- 1. sir_Upro (Residuals): Always H=10, categorical=FALSE ---
+  sir_Upro <- tryCatch(
+    {
+      U <- y_list$U
+      if (p <= screen_num) {
+        fit <- LassoSIR::LassoSIR(x, U,
+          H = 10, choosing.d = "automatic",
+          solution.path = FALSE, categorical = FALSE,
+          nfolds = 5, screening = FALSE
+        )
+        beta <- fit$beta
+        sir_Upro <- beta / sqrt(colSums(beta^2))
+      } else {
+        # Screening for U always uses DC-SIS
+        rank_U <- VariableScreening::screenIID(X = x, Y = U, method = "DC-SIS")
+        idx_U <- seq(1:p)[rank_U$rank <= screen_num]
+        fit <- LassoSIR::LassoSIR(x[, idx_U, drop = FALSE], U,
+          H = 10, choosing.d = "automatic",
+          solution.path = FALSE, categorical = FALSE,
+          nfolds = 5, screening = FALSE
+        )
+        beta_f <- matrix(0, nrow = p, ncol = ncol(fit$beta))
+        beta_f[idx_U, ] <- fit$beta
+        sir_Upro <- beta_f / sqrt(colSums(beta_f^2))
+      }
+    },
+    error = function(e) {
+      return(NA)
+    }
+  )
+
+  # --- 2. sir_ypro (Response): H and categorical depend on family ---
+  if (methods == "local") {
+    sir_ypro <- tryCatch(
       {
-        beta <- NULL
-        if (p <= screen_num) {
-          fit <- LassoSIR::LassoSIR(x, tar, categorical = is_cat, screening = FALSE, H = 10, solution.path = FALSE, nfolds = 5)
-          beta <- fit$beta
+        Y <- as.numeric(y_list$original_y)
+
+        # Logic for categorical and parameters based on family
+        if (family == "binomial") {
+          categorical_Y <- TRUE
+          H_val <- 2
+          met <- "MV-SIS"
         } else {
-          met <- if (is_cat) "MV-SIS" else "DC-SIS"
-          rank <- VariableScreening::screenIID(x, tar, method = met)$rank
-          idx <- which(rank <= screen_num)
-          if (length(idx) > 0) {
-            fit <- LassoSIR::LassoSIR(x[, idx, drop = FALSE], tar, categorical = is_cat, screening = FALSE, H = 10, solution.path = FALSE, nfolds = 5)
-            beta <- matrix(0, p, ncol(fit$beta))
-            beta[idx, ] <- fit$beta
-          }
+          categorical_Y <- FALSE
+          H_val <- 10
+          met <- "DC-SIS"
         }
-        beta <- as.matrix(beta)
-        if (ncol(beta) == 0) {
-          return(matrix(NA, p, 1))
+
+        if (p <= screen_num) {
+          fit <- LassoSIR::LassoSIR(x, Y,
+            H = H_val, choosing.d = "automatic",
+            solution.path = FALSE, categorical = categorical_Y,
+            nfolds = 5, screening = categorical_Y
+          )
+          beta <- fit$beta
+          sir_ypro <- beta / sqrt(colSums(beta^2))
+        } else {
+          # Screening method matches the data type
+          rank_y <- VariableScreening::screenIID(X = x, Y = Y, method = met)
+          idx_y <- seq(1:p)[rank_y$rank <= screen_num]
+          fit <- LassoSIR::LassoSIR(x[, idx_y, drop = FALSE], Y,
+            H = H_val, choosing.d = "automatic",
+            solution.path = FALSE, categorical = categorical_Y,
+            nfolds = 5, screening = categorical_Y
+          )
+          beta_f <- matrix(0, nrow = p, ncol = ncol(fit$beta))
+          beta_f[idx_y, ] <- fit$beta
+          sir_ypro <- beta_f / sqrt(colSums(beta_f^2))
         }
-        norm <- sqrt(colSums(beta^2))
-        norm[norm < 1e-12] <- 1
-        return(t(t(beta) / norm))
       },
-      error = function(e) matrix(NA, p, 1)
+      error = function(e) {
+        return(NULL)
+      }
     )
+  } else {
+    sir_ypro <- NULL
   }
 
-  return(list(
-    U_pro = run_sdr(y_list$U, FALSE),
-    y_pro = run_sdr(y_list$original_y, family == "binomial")
-  ))
+
+  return(list(U_pro = sir_Upro, y_pro = sir_ypro))
 }
 
 # --- 3.4 Pcvm Test Statistics ---
-calc_martingale_pvals <- function(x_source, est, pro_target, family) {
+calc_martingale_pvals <- function(x_source, est, sir_pro_target, beta_pro_target, family) {
   n <- nrow(x_source)
-  num_pro <- ncol(pro_target)
-  pvals <- numeric(num_pro)
   U <- as.vector(est$U)
 
-  for (q in 1:num_pro) {
-    x_pro <- as.vector(x_source %*% pro_target[, q])
-    # Original logic: Indictor <- ifelse(x_pro <= t(x_pro), 1, 0)
-    Ind <- outer(x_pro, x_pro, "<=") * 1
+  # clean <- function(m) m[, !apply(m, 2, function(v) any(is.na(v))), drop = FALSE]
+  sir_pro <- sir_pro_target
+  beta_pro <- beta_pro_target
 
-    # --- Branch A: Linear (Gaussian) ---
-    if (family == "gaussian") {
+  # --- Branch A: Gaussian Case (Linear) ---
+  if (family == "gaussian") {
+    all_pro <- cbind(sir_pro, beta_pro)
+    n_pro <- ncol(all_pro)
+    pvals <- numeric(n_pro)
+
+    for (q in 1:n_pro) {
+      x_pro <- x_source %*% all_pro[, q]
+      x_Indictor <- ifelse(x_pro %*% rep(1, n) <= rep(1, n) %*% t(x_pro), 1, 0)
+
       hat_A <- rbind(t(x_pro), rep(1, n))
-
-      G_inv <- array(0, c(2, 2, n))
+      Gamma_inv <- array(0, dim = c(2, 2, n))
       for (i in 1:n) {
-        # Original: ginv((hat_A%*%diag(Ind[i,]))%*%t(hat_A))
-        G_inv[, , i] <- MASS::ginv((hat_A %*% diag(Ind[i, ])) %*% t(hat_A))
+        Gamma_inv[, , i] <- MASS::ginv((hat_A %*% diag(x_Indictor[i, ])) %*% t(hat_A))
       }
+      Integral <- hat_A %*% diag(as.vector(U)) %*% t(x_Indictor)
 
-      Integ <- hat_A %*% diag(as.vector(U)) %*% t(Ind)
-
-      sec <- matrix(0, n, n)
+      martingle_sec <- diag(0, n)
       for (l in 1:n) {
-        sec[l, ] <- (t(hat_A[, l]) %*% G_inv[, , l] %*% Integ[, l]) * Ind[l, ]
+        martingle_sec[l, ] <- (t(hat_A[, l]) %*% Gamma_inv[, , l] %*% Integral[, l]) %*% x_Indictor[l, ]
       }
 
-      m_sta <- (1 / sqrt(n)) * (t(U) %*% Ind - colSums(sec))
+      martingle_sta <- (1 / sqrt(n)) * t(U) %*% x_Indictor - (1 / sqrt(n)) * colSums(martingle_sec)
 
-      ord <- sort(x_pro)
-      t_val <- ord[floor(0.99 * n)]
-      sigma2 <- mean(U^2)
+      # Denominator logic based on original linear code
+      t_val <- sort(x_pro)[floor(0.99 * n)]
+      sigma_square <- mean(U^2)
       F_val <- (mean(x_pro <= t_val))^2
-      stat <- (1 / (sigma2 * max(F_val, 1e-10))) * mean((x_pro <= t_val) * (as.vector(m_sta)^2))
-
-      pvals[q] <- pvalue_integ_Brown(stat)
-    }
-
-    # --- Branch B: Logit (Binomial) ---
-    else {
-      deri <- est$deri_link # Already calculated as p(1-p) in helper
-
-      # The third term in band_y: (x %*% beta_hat) * deri
-      term3 <- as.vector((x_source %*% est$beta_hat + est$intercept) * deri)
-      band_y <- cbind(U^2, deri, term3)
-
-      # Original logic: bandwidth_choice specific to logit
-      h <- bandwidth_choice_logit(x_pro, band_y)
-
-      # Kernel Construction (Epanechnikov)
-      dist <- outer(x_pro, x_pro, "-") / h
-      K <- (3 / 4) * (1 - dist^2) * (abs(dist) <= 1)
-
-      # Original A matrices calculation
-      denom <- as.vector(K %*% U^2) + n^(-12)
-      A1 <- ((K %*% deri) * x_pro) / denom
-      A2 <- (K %*% term3) / denom
-      A3 <- (K %*% deri) / denom
-      hat_A <- rbind(t(A1), t(A2), t(A3))
-
-      G_inv <- array(0, c(3, 3, n))
-      for (i in 1:n) {
-        # Original logic: ((rep(1,3)%*%t(U)^2)*hat_A) ...
-        term <- ((rep(1, 3) %*% t(U)^2) * hat_A) %*% (t(hat_A) * (as.matrix(Ind[i, ]) %*% rep(1, 3))) + n^(-12)
-        G_inv[, , i] <- MASS::ginv(term)
-      }
-
-      Integ <- ((rep(1, 3) %*% t(U)) * hat_A) %*% t(Ind)
-
-      sec <- matrix(0, n, n)
-      for (l in 1:n) {
-        val <- (U[l]^2 * t(hat_A[, l])) %*% G_inv[, , l] %*% Integ[, l]
-        sec[l, ] <- as.numeric(val) * Ind[l, ]
-      }
-
-      m_sta <- (1 / sqrt(n)) * (t(U) %*% Ind - colSums(sec))
-
-      ord <- sort(x_pro)
-      t_val <- ord[floor(0.99 * n)]
-      # Original: psi_1 <- (1/n1) * sum(U1^2 * (x1_pro <= t_1))
-      psi <- mean(U^2 * (x_pro <= t_val))
-      # Original: (1/psi_1^2) * mean(...)
-      stat <- (1 / max(psi^2, 1e-10)) * mean(U^2 * (x_pro <= t_val) * (as.vector(m_sta)^2))
-
-      pvals[q] <- pvalue_integ_Brown(stat)
+      PCvM <- (1 / (sigma_square * F_val)) * mean((x_pro <= t_val) * (t(martingle_sta)^2))
+      pvals[q] <- pvalue_integ_Brown(PCvM)
     }
   }
+
+  # --- Branch B: Binomial Case (Logit) ---
+  else {
+    n_sir <- ncol(sir_pro)
+    pvals <- numeric(n_sir + 1)
+    deri_link <- est$deri # Expected to be p*(1-p)
+
+    # 1. Loop for sir_Upro (Non-parametric 3x3 Branch)
+    for (q in 1:n_sir) {
+      x_pro <- x_source %*% sir_pro[, q]
+      band_y <- cbind(U^2, deri_link, (x_source %*% est$beta_hat) * deri_link)
+      h <- bandwidth_choice(x_pro, band_y)
+
+      Ker_inter <- (x_pro %*% rep(1, n) - rep(1, n) %*% t(x_pro)) / h
+      Ker_indictor <- ifelse(abs(Ker_inter) <= 1, 1, 0)
+      kernel <- (3 / 4) * (1 - Ker_inter^2) * Ker_indictor
+
+      Indictor <- ifelse(x_pro %*% rep(1, n) <= rep(1, n) %*% t(x_pro), 1, 0)
+
+      # Construct hat_A components
+      denom <- kernel %*% U^2 + n^(-12)
+      A_1 <- ((kernel %*% deri_link) * x_pro) / denom
+      A_2 <- (kernel %*% ((x_source %*% est$beta_hat) * deri_link)) / denom
+      A_3 <- (kernel %*% deri_link) / denom
+      hat_A <- rbind(t(A_1), t(A_2), t(A_3))
+
+      Gamma_inv <- array(0, dim = c(3, 3, n))
+      for (i in 1:n) {
+        Gamma_inv[, , i] <- MASS::ginv(((rep(1, 3) %*% t(U)^2) * hat_A) %*% (t(hat_A) * (as.matrix(Indictor[i, ]) %*% rep(1, 3))) + n^(-12))
+      }
+      Integral <- ((rep(1, 3) %*% t(U)) * hat_A) %*% t(Indictor)
+
+      martingle_sec <- matrix(0, n, n)
+      for (l in 1:n) {
+        martingle_sec[l, ] <- (U[l]^2 * t(hat_A[, l]) %*% Gamma_inv[, , l] %*% Integral[, l]) %*% Indictor[l, ]
+      }
+      martingle_sta <- (1 / sqrt(n)) * t(U) %*% Indictor - (1 / sqrt(n)) * colSums(martingle_sec)
+
+      # Denominator logic based on original logit code
+      t_val <- sort(x_pro)[floor(0.99 * n)]
+      psi <- mean(U^2 * (x_pro <= t_val))
+      PCvM <- (1 / psi^2) * mean(U^2 * (x_pro <= t_val) * (t(martingle_sta)^2))
+
+      pvals[q] <- pvalue_integ_Brown(PCvM)
+    }
+
+    # 2. Calculation for beta_pro (Parametric 2x2 Branch)
+    x_pro_beta <- x_source %*% beta_pro[, 1]
+    beta_Indictor <- ifelse(x_pro_beta %*% rep(1, n) <= rep(1, n) %*% t(x_pro_beta), 1, 0)
+
+    hat_beta_A <- rbind(t(x_pro_beta), rep(1, n))
+    Gamma_beta_inv <- array(0, dim = c(2, 2, n))
+    for (i in 1:n) {
+      Gamma_beta_inv[, , i] <- MASS::ginv(((rep(1, 2) %*% t(U)^2) * hat_beta_A) %*% (t(hat_beta_A) * (as.matrix(beta_Indictor[i, ]) %*% rep(1, 2))) + n^(-10))
+    }
+
+    Integral_beta <- ((rep(1, 2) %*% t(U)) * hat_beta_A) %*% t(beta_Indictor)
+
+    martingle_beta_sec <- matrix(0, n, n)
+    for (l in 1:n) {
+      martingle_beta_sec[l, ] <- (U[l]^2 * t(hat_beta_A[, l]) %*% Gamma_beta_inv[, , l] %*% Integral_beta[, l]) %*% beta_Indictor[l, ]
+    }
+    martingle_beta_sta <- (1 / sqrt(n)) * t(U) %*% beta_Indictor - (1 / sqrt(n)) * colSums(martingle_beta_sec)
+
+    t_beta <- sort(x_pro_beta)[floor(0.99 * n)]
+    psi_beta <- (1 / n) * sum(U^2 * (x_pro_beta <= t_beta))
+    PCvM_beta <- (1 / psi_beta^2) * mean(U^2 * (x_pro_beta <= t_beta) * (t(martingle_beta_sta)^2))
+
+    pvals[n_sir + 1] <- pvalue_integ_Brown(PCvM_beta)
+  }
+
   return(pvals)
 }
 
 # --- 3.5 PLS Test Statistics ---
-calc_pls_pvals <- function(x_source, U, pro_target) {
+calc_pls_pvals <- function(x_source, U, sir_pro_target, beta_pro_target, h) {
+  # --- Step 1: Matrix Construction (Matching original logic) ---
+  # Combine SDR directions and Beta direction into a single projection set
+  pro_pls <- cbind(sir_pro_target, beta_pro_target)
+
+  # Clean NA columns as per tryCatch logic in original snippets
+  pro_pls <- pro_pls[, !apply(pro_pls, 2, function(v) any(is.na(v))), drop = FALSE]
+
   n <- nrow(x_source)
-  h <- n^(-2 / 9)
-  num_pro <- ncol(pro_target)
-  pvals <- numeric(num_pro)
-  EE <- U %*% t(U)
+  pro_pls_num <- ncol(pro_pls)
+  pval_matrix_PLS <- matrix(nrow = 1, ncol = pro_pls_num)
 
-  for (q in 1:num_pro) {
-    x_pro <- as.vector(x_source %*% pro_target[, q])
-    dist <- outer(x_pro, x_pro, "-") / h
-    # Epanechnikov kernel: (3/4)*(1-x^2)*I(|x|<=1)
-    K <- (3 / 4) * (1 - dist^2) * (abs(dist) <= 1)
+  # errormat: Residual matrix based on current split
+  errormat <- U %*% t(U)
+  epsilon <- 1e-12 # Matching the epsilon in your PLS snippet
 
-    KEE <- K * EE
-    numer <- sum(KEE) - sum(diag(KEE))
-    denom_sq <- sum(KEE^2) - sum(diag(KEE^2))
-    Tn <- numer / sqrt(2 * denom_sq + 1e-12)
-    pvals[q] <- 1 - pnorm(Tn)
+  # --- Step 2: Loop through each projection ---
+  for (q in 1:pro_pls_num) {
+    x_pro <- x_source %*% pro_pls[, q]
+
+    # Kernel function matrix (Epanechnikov kernel)
+    x_pro_mat <- ((x_pro) %*% matrix(1, 1, n) - matrix(1, n, 1) %*% (t(x_pro))) / h
+    indictor <- ifelse(abs(x_pro_mat) <= 1, 1, 0)
+    kermat <- (3 / 4) * (1 - x_pro_mat^2) * indictor
+
+    KE <- kermat * errormat
+    num <- sum(KE) - psych::tr(KE)
+    # den <- sqrt(2 * (sum(KE^2) - psych::tr(KE^2)) + epsilon)
+    den <- sqrt(2 * (sum(KE^2) - psych::tr(KE^2)))
+
+    Tn <- num / den
+
+    pval_matrix_PLS[, q] <- 1 - pnorm(Tn)
   }
-  return(pvals)
+
+  # Return as a vector to be consistent with p_mart
+  return(as.vector(pval_matrix_PLS))
 }
 
 # --- 3.6 P-value Combination (with Truncation) ---
@@ -309,29 +387,31 @@ combine_pvals <- function(p) {
 }
 
 # --- 3.7 The choice for the bandwidth for martingale-based test ---
-bandwidth_choice_logit <- function(x, y_mat) {
+bandwidth_choice <- function(x, y_mat) {
   n <- length(x)
-  # Original code: c_h <- seq(0.25, 1.25, 0.15)
+  p <- ncol(x)
   c_h <- seq(0.25, 1.25, 0.15)
-  h_seq <- c_h * n^(-2 / 9)
-  CV <- numeric(length(h_seq))
+  len_h <- length(c_h)
+  h <- c_h * n^(-2 / 9)
+  CV <- rep(0, len_h)
 
-  for (i in seq_along(h_seq)) {
-    h <- h_seq[i]
-    dist <- outer(x, x, "-") / h
-    K <- (3 / 4) * (1 - dist^2) * (abs(dist) <= 1)
-    diag(K) <- 0
-    denom <- rowSums(K) + n^(-12)
+  for (i in 1:len_h) {
+    Ker_inter <- (x %*% rep(1, n) - rep(1, n) %*% t(x)) / h[i] # kernel function matrix
+    # kernel <- exp(-0.5*Ker_inter^2)                                          # Gaussian kernel
 
-    cv_err <- 0
-    # Cross Validation error sum across the columns of band_y
-    for (k in 1:ncol(y_mat)) {
-      est <- (K %*% y_mat[, k]) / denom
-      cv_err <- cv_err + mean((y_mat[, k] - est)^2)
-    }
-    CV[i] <- cv_err
+    Ker_indictor <- ifelse(abs(Ker_inter) <= 1, 1, 0)
+    kernel <- (3 / 4) * (1 - Ker_inter^2) * Ker_indictor
+
+    diag(kernel) <- rep(0, n)
+
+    R1 <- mean((y_mat[, 1] - (kernel %*% y_mat[, 1]) / (rowSums(kernel) + n^(-12)))^2)
+    R2 <- mean((y_mat[, 2] - (kernel %*% y_mat[, 2]) / (rowSums(kernel) + n^(-12)))^2)
+    R3 <- mean((y_mat[, 3] - (kernel %*% y_mat[, 3]) / (rowSums(kernel) + n^(-12)))^2)
+    CV[i] <- R1 + R2 + R3
   }
-  return(h_seq[which.min(CV)])
+  index <- which.min(CV)
+  h0 <- c_h[index] * n^(-2 / 9) # The bandwidth for the martingale with beta1 and alpha as projections
+  return(c(h0))
 }
 
 # --- 3.8 The p-value of int_0^1 B(t)^2 dt where B(t) is the standard brown motion ---
@@ -368,19 +448,18 @@ pvalue_integ_Brown <- function(x) {
     0.0025, 0.0025, 0.0025, 0.0024, 0.0024, 0.0024, 0.0023, 0.0023, 0.0023, 0.0023, 0.0022, 0.0022, 0.0022, 0.0021,
     0.0021, 0.0021, 0.0021, 0.002, 0.002, 0.002, 0.0019
   )
-
   x0 <- seq(0, 3.99, by = 0.01)
   if (is.na(x)) {
-    return(NA)
+    p <- NA
+  } else if (x > 3.99 & x < 8) {
+    p <- -0.0019 * x / 4.01 + 8 * 0.0019 / 4.01
+  } else if (x >= 8) {
+    p <- 0
+  } else if (x == 0) {
+    p <- 1
+  } else {
+    i <- sum(x0 < x)
+    p <- (p0[i + 1] - p0[i]) * x / (x0[i + 1] - x0[i]) + (x0[i + 1] * p0[i] - p0[i + 1] * x0[i]) / (x0[i + 1] - x0[i])
   }
-  if (x >= 8) {
-    return(0)
-  }
-  if (x > 3.99) {
-    return(-0.0019 * x / 4.01 + 8 * 0.0019 / 4.01)
-  }
-
-  i <- sum(x0 < x)
-  if (i == 0) i <- 1
-  return((p0[i + 1] - p0[i]) * x / 0.01 + (x0[i + 1] * p0[i] - p0[i + 1] * x0[i]) / 0.01)
+  return(p)
 }

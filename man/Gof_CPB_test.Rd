@@ -4,15 +4,15 @@
 \alias{Gof_CPB_test}
 \title{A Two-Step Projection-Based Goodness-of-Fit Test for Ultra-High Dimensional Sparse Regressions}
 \usage{
-Gof_CPB_test(X, Y, fam = c("gaussian", "binomial", "poisson"), penalize = TRUE)
+Gof_CPB_test(
+  x,
+  y,
+  family = c("gaussian", "binomial", "poisson"),
+  penalize = TRUE,
+  c_h = 1
+)
 }
 \arguments{
-\item{X}{Input matrix with \code{n} rows, each a \code{p}-dimensional observation vector.}
-
-\item{Y}{Response vector.}
-
-\item{fam}{Family type for GLM Models fitting. Must be "gaussian", "binomial" or "poisson".}
-
 \item{penalize}{\code{TRUE} if penalization should be used in glmnet function when fitting the GLM models (see Details below).
 #' @details
   This function tests if the conditional mean of \code{y} given \code{X} could be
@@ -23,6 +23,12 @@ Gof_CPB_test(X, Y, fam = c("gaussian", "binomial", "poisson"), penalize = TRUE)
   If \code{penalize == TRUE}, these fits use \code{cv.glmnet} from package \code{glmnet},
   otherwise they use \code{glmnet} with penalty set to 0.
   If \code{fam=="binomial"}, the param categorical in "LassoSIR" function should be TRUE,FALSE otherwise.}
+
+\item{X}{Input matrix with \code{n} rows, each a \code{p}-dimensional observation vector.}
+
+\item{Y}{Response vector.}
+
+\item{fam}{Family type for GLM Models fitting. Must be "gaussian", "binomial" or "poisson".}
 }
 \value{
 the function outputs two p-values(the minimump-value and the Fisher combination of p-values)
@@ -33,49 +39,55 @@ The function can test good
 \examples{
 # Simulation example  H11
 set.seed(123)
-n <- 300; p <- 50; pho <- 0.4
-mu <- rep(0, p);v <- pho^(0:(p-1))
+n <- 300
+p <- 50
+pho <- 0.4
+mu <- rep(0, p)
+v <- pho^(0:(p - 1))
 sigma <- toeplitz(v)
 x <- mvrnorm(n, mu, sigma)
-beta0 <- c(rep(1,5),rep(0,p-5))
+beta0 <- c(rep(1, 5), rep(0, p - 5))
 
 a <- 0
-y <- x \%*\% beta0 + a * 0.1*(x \%*\% beta0)^2 + rnorm(n)
-output11 <- Gof_CPB_test(x, y, fam = "gaussian")
+y <- x \%*\% beta0 + a * 0.1 * (x \%*\% beta0)^2 + rnorm(n)
+output11 <- Gof_CPB_test(x, y, family = "gaussian")
 a <- 1
-y <- x \%*\% beta0 + a * 0.1*(x \%*\% beta0)^2 + rnorm(n)
-output13 <- Gof_CPB_test(x, y, fam = "gaussian")
+y <- x \%*\% beta0 + a * 0.1 * (x \%*\% beta0)^2 + rnorm(n)
+output13 <- Gof_CPB_test(x, y, family = "gaussian")
 
 # Real data analysis
 dim(data_crime)
 y <- data_crime[, 100]
 x <- data_crime[, -100]
-output15 <- Gof_CPB_test(x, y, fam = "gaussian")
+output15 <- Gof_CPB_test(x, y, family = "gaussian")
 
 # Simulation example # H21
 set.seed(123)
-n <- 300; p <- 50; pho <- 0.4
-mu <- rep(0, p);v <- pho^(0:(p-1))
+n <- 300
+p <- 50
+pho <- 0.4
+mu <- rep(0, p)
+v <- pho^(0:(p - 1))
 sigma <- toeplitz(v)
 x <- mvrnorm(n, mu, sigma)
-beta0 <- c(rep(1,5),rep(0,p-5))
+beta0 <- c(rep(1, 5), rep(0, p - 5))
 
 a <- 0
-z <- x \%*\% beta0 + a*0.2*(x \%*\% beta0)^2
-pr <- 1/(1 + exp(-z))
-y <- matrix(rbinom(n, 1, pr),ncol = 1)
-output21 <- Gof_CPB_test(x, y, fam = "binomial")
+z <- x \%*\% beta0 + a * 0.2 * (x \%*\% beta0)^2
+pr <- 1 / (1 + exp(-z))
+y <- matrix(rbinom(n, 1, pr), ncol = 1)
+output21 <- Gof_CPB_test(x, y, family = "binomial")
 a <- 1
-z <- x \%*\% beta0 + a*0.2*(x \%*\% beta0)^2
-pr <- 1/(1 + exp(-z))
-y <- matrix(rbinom(n, 1, pr),ncol = 1)
-output23 <- Gof_CPB_test(x, y, fam = "binomial")
+z <- x \%*\% beta0 + a * 0.2 * (x \%*\% beta0)^2
+pr <- 1 / (1 + exp(-z))
+y <- matrix(rbinom(n, 1, pr), ncol = 1)
+output23 <- Gof_CPB_test(x, y, family = "binomial")
 
 # Real data analysis
 dim(data_AML)
 y <- data_AML$ELN_binary
-x <- data_AML[,1:(ncol(data_AML)-2)]
-x <- x[,-which(is.na(apply(data_AML,2,sum)))]
-output25 <- Gof_CPB_test(x, y, fam = "binomial")
+x <- data_AML[, 1:(ncol(data_AML) - 2)]
+x <- x[, -which(is.na(apply(data_AML, 2, sum)))]
+output25 <- Gof_CPB_test(x, y, family = "binomial")
 
 }
