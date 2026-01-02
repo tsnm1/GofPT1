@@ -7,10 +7,11 @@
 
 <!-- badges: end -->
 
-The goal of GofPT1 is to provide rigorous goodness-of-fit testing
-methodologies for sparse parametric regression models in ultra-high
-dimensional settings, where the number of covariates ($p$) may
-significantly exceed the sample size ($n$).!!!
+This R package implements the methodologies developed in the following two works for ultra-high dimensional sparse parametric regressions:
+
+* A Two-Step Projection-Based Goodness-of-Fit Test: This paper proposes a two-step strategy that first constructs multiple test statistics based on projected predictors from distinct projections to mitigate the dimensionality problem. The second step employs p-value combination procedures (e.g., the minimum p-value and the Fisher combination) to form the final tests. It is particularly powerful for detecting local alternatives as if the predictor were univariate.
+
+* Asymptotic Distribution-Free Tests via Projected Empirical Processes:  This paper develops a methodology based on martingale-transformed, projected residual-marked empirical processes. The martingale transformation renders the test asymptotically distribution-free. To enhance robustness, it employs the Cauchy combination to aggregate p-values across multiple projections and proposes a hybrid test that aggregates both empirical process-based and local smoothing tests, making it powerful against both low-frequency and high-frequency alternatives.
 
 ## Installation
 

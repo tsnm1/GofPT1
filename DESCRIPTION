@@ -5,6 +5,7 @@ Version: 0.1.0
 Authors@R: c(
     person("Falong", "Tan", email = "falongtan@hnu.edu.cn", role = c("aut", "cre")),
     person("Jie", "Liu", email = "Jiel000@hnu.edu.cn", role = "aut"),
+    person("Shan", "Tang", email = "tangshanst@whut.edu.cn", role = "aut"),
     person("Heng", "Peng", role = "aut"),
     person("Lixing", "Zhu", role = "aut")
   )
