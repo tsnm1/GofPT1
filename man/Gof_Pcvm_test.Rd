@@ -18,10 +18,8 @@ A list containing various aggregated p-values, where \code{pval_cauchy_hybrid} i
 primary result representing the combination of both Martingale and PLS tests.
 }
 \description{
-This function implements a novel hybrid goodness-of-fit test for sparse parametric regression models
-in ultra-high dimensional settings. It aggregates p-values from two distinct approaches—
-martingale-transformed empirical process-based tests and local smoothing tests—using the Cauchy
-combination method to ensure robust power against various alternatives.
+This function constructs a Cramer-von Mises type test based on a martingale-transformed,
+projected residual-marked empirical process. Furthermore, it proposes a novel hybrid test that aggregates empirical process-based tests and local smoothing tests using Cauchy combination.
 }
 \examples{
 # Simulation example # H11

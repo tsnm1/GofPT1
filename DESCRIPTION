@@ -10,7 +10,7 @@ Authors@R: c(
     person("Lixing", "Zhu", role = "aut")
   )
 Maintainer: Falong Tan <falongtan@hnu.edu.cn>
-Description: Methodology for testing nonlinearity in the conditional mean function in low, high or ultra-high-dimensional generalized linear models. Details on the algorithms can be found in the paper by Tan, Liu, Peng and Zhu (2025).
+Description: Details on the algorithms can be found in the paper by Tan, Liu, Peng and Zhu (2025) and Tan, Tang and Zhu (2026). 
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true

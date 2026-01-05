@@ -7,7 +7,10 @@ library(caret)
 
 #' @title A Two-Step Projection-Based Goodness-of-Fit Test for Ultra-High Dimensional Sparse Regressions
 #'
-#' @description The function can test good
+#' @description The function implements a novel two-step strategy for testing the goodness-of-fit of para metric sparse regression models in ultra-high dimensional settings,
+#' where the predictor dimension far exceeds the sample size. It first constructs multiple test statistics based on projected predictors from distinct projections and
+#' second employs powerful $p$-value combination procedures, such as the minimum $p$-value and the Fisher combination of $p$-value,
+#' to form our final tests and enhance power.
 #' @param X Input matrix with \code{n} rows, each a \code{p}-dimensional observation vector.
 #' @param Y Response vector.
 #' @param fam Family type for GLM Models fitting. Must be "gaussian", "binomial" or "poisson".
@@ -150,11 +153,8 @@ Gof_CPB_test <- function(x, y, family = c("gaussian", "binomial", "poisson"),
 
 #' @title "Asymptotic Distribution-Free Tests for Ultra-high Dimensional Parametric Regressions via Projected Empirical Processes and p-value Combination"
 #'
-#' @description This function implements a novel hybrid goodness-of-fit test for sparse parametric regression models
-#' in ultra-high dimensional settings. It aggregates p-values from two distinct approaches—
-#' martingale-transformed empirical process-based tests and local smoothing tests—using the Cauchy
-#' combination method to ensure robust power against various alternatives.
-#'
+#' @description This function constructs a Cramer-von Mises type test based on a martingale-transformed,
+#' projected residual-marked empirical process. Furthermore, it proposes a novel hybrid test that aggregates empirical process-based tests and local smoothing tests using Cauchy combination.
 #' @param X Input matrix with \code{n} rows, each a \code{p}-dimensional observation vector.
 #' @param Y Response vector.
 #' @param fam Family type for GLM model fitting. Must be "gaussian" or "binomial".

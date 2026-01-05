@@ -34,7 +34,10 @@ Gof_CPB_test(
 the function outputs two p-values(the minimump-value and the Fisher combination of p-values)
 }
 \description{
-The function can test good
+The function implements a novel two-step strategy for testing the goodness-of-fit of para metric sparse regression models in ultra-high dimensional settings,
+where the predictor dimension far exceeds the sample size. It first constructs multiple test statistics based on projected predictors from distinct projections and
+second employs powerful $p$-value combination procedures, such as the minimum $p$-value and the Fisher combination of $p$-value,
+to form our final tests and enhance power.
 }
 \examples{
 # Simulation example  H11
